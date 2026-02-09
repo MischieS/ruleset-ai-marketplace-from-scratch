@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { MarketplaceRepository } from "./marketplace/repository.js";
 import { MarketplaceService, summarizeProduct } from "./marketplace/service.js";
+import { defaultMarketplaceSeed } from "./marketplace/defaultSeed.js";
 import { PostgresEventSink } from "./infra/postgres.js";
 import { requireAuth, requireRole, signAuthToken } from "./infra/auth.js";
 import { createRateLimiter, hardenHttp } from "./infra/security.js";
@@ -52,7 +53,17 @@ const promotionStatusSchema = z.object({
 });
 
 export async function createApp(seedPath = "data/marketplace.seed.json") {
-  const repo = await MarketplaceRepository.fromFile(seedPath);
+  let repo: MarketplaceRepository;
+  try {
+    repo = await MarketplaceRepository.fromFile(seedPath);
+  } catch (error) {
+    const fsError = error as NodeJS.ErrnoException;
+    if (fsError.code === "ENOENT") {
+      repo = MarketplaceRepository.fromSeed(defaultMarketplaceSeed);
+    } else {
+      throw error;
+    }
+  }
   const service = new MarketplaceService(repo);
   await service.bootstrapDemoUsers();
 

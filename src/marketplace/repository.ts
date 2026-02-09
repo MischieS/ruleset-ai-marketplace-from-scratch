@@ -35,6 +35,11 @@ export class MarketplaceRepository {
     return new MarketplaceRepository(parsed);
   }
 
+  static fromSeed(seed: MarketplaceSeed): MarketplaceRepository {
+    const parsed = seedSchema.parse(seed);
+    return new MarketplaceRepository(parsed);
+  }
+
   getProducts(): Product[] {
     return [...this.products];
   }
