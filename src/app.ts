@@ -304,6 +304,20 @@ export async function createApp(seedPath = "data/marketplace.seed.json") {
   return app;
 }
 
+let cachedApp: express.Express | null = null;
+
+async function getCachedApp(): Promise<express.Express> {
+  if (!cachedApp) {
+    cachedApp = await createApp();
+  }
+  return cachedApp;
+}
+
+export default async function handler(req: any, res: any) {
+  const app = await getCachedApp();
+  return app(req, res);
+}
+
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
   const port = Number(process.env.PORT ?? 4173);
