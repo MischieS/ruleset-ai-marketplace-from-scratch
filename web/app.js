@@ -1,15 +1,18 @@
 const productsNode = document.getElementById("products");
 const sellersNode = document.getElementById("sellerLeaderboard");
+
 const searchInput = document.getElementById("searchInput");
 const viewMode = document.getElementById("viewMode");
 const typeFilter = document.getElementById("typeFilter");
 const sortFilter = document.getElementById("sortFilter");
 const slotFilter = document.getElementById("slotFilter");
+
 const loginForm = document.getElementById("loginForm");
 const emailInput = document.getElementById("emailInput");
 const passwordInput = document.getElementById("passwordInput");
 const authState = document.getElementById("authState");
 const authOutput = document.getElementById("authOutput");
+
 const logoutBtn = document.getElementById("logoutBtn");
 const myOrdersBtn = document.getElementById("myOrdersBtn");
 const financeBtn = document.getElementById("financeBtn");
@@ -19,8 +22,27 @@ const promotionStatusBtn = document.getElementById("promotionStatusBtn");
 const slaBtn = document.getElementById("slaBtn");
 const adminPayoutsBtn = document.getElementById("adminPayoutsBtn");
 
+const refreshBtn = document.getElementById("refreshBtn");
+const jumpDiscoveryBtn = document.getElementById("jumpDiscoveryBtn");
+const jumpCatalogBtn = document.getElementById("jumpCatalogBtn");
+
+const metricProducts = document.getElementById("metricProducts");
+const metricProductsMeta = document.getElementById("metricProductsMeta");
+const metricAvgScore = document.getElementById("metricAvgScore");
+const metricAvgScoreMeta = document.getElementById("metricAvgScoreMeta");
+const metricSponsoredShare = document.getElementById("metricSponsoredShare");
+const metricSponsoredMeta = document.getElementById("metricSponsoredMeta");
+const metricTopSeller = document.getElementById("metricTopSeller");
+const metricTopSellerMeta = document.getElementById("metricTopSellerMeta");
+
 let token = localStorage.getItem("ruleset_token") ?? "";
 let me = null;
+
+const state = {
+  catalogRows: [],
+  discoveryRows: [],
+  sellers: [],
+};
 
 function setAuthOutput(value) {
   authOutput.textContent = typeof value === "string" ? value : JSON.stringify(value, null, 2);
@@ -32,6 +54,14 @@ function updateAuthState() {
 
 function formatCurrency(value) {
   return `$${Number(value).toFixed(2)}`;
+}
+
+function formatPercent(value) {
+  return `${Number(value).toFixed(1)}%`;
+}
+
+function formatCompact(value) {
+  return new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(Number(value));
 }
 
 async function api(url, options = {}) {
@@ -59,6 +89,16 @@ function canPromoteProduct(item) {
   return me?.role === "seller" && me?.sellerId && me.sellerId === item.sellerId;
 }
 
+function createScoreRow(label, value) {
+  return `
+    <div class="score-row">
+      <span>${label}</span>
+      <span class="track"><span class="fill" style="width:${Math.max(0, Math.min(100, Number(value)))}%"></span></span>
+      <strong>${Number(value).toFixed(0)}</strong>
+    </div>
+  `;
+}
+
 async function showPolicy(productId) {
   try {
     const policy = await api(`/api/policy/products/${productId}`);
@@ -69,8 +109,8 @@ async function showPolicy(productId) {
 }
 
 async function createPromotionForProduct(productId) {
-  const bid = Number(prompt("Bid CPM in USD (example 6):", "6"));
-  const budget = Number(prompt("Daily budget in USD (minimum 10):", "40"));
+  const bid = Number(prompt("Bid CPM in USD (minimum 1)", "6"));
+  const budget = Number(prompt("Daily budget in USD (minimum 10)", "40"));
   if (!Number.isFinite(bid) || !Number.isFinite(budget)) {
     setAuthOutput("Invalid bid or budget");
     return;
@@ -82,6 +122,7 @@ async function createPromotionForProduct(productId) {
       body: JSON.stringify({ productId, bidCpmUsd: bid, dailyBudgetUsd: budget }),
     });
     setAuthOutput(created);
+    await refreshAllData();
   } catch (error) {
     setAuthOutput(error.message);
   }
@@ -92,22 +133,20 @@ async function trackPromotionClick(context) {
   try {
     await api(`/api/promotions/${context.campaignId}/click`, { method: "POST" });
   } catch {
-    // non-blocking
+    // non-blocking analytics path
   }
 }
 
-function renderProduct(item, context = {}) {
+function renderProductCard(item, context = {}) {
   const card = document.createElement("article");
   card.className = "card";
 
   const sponsoredTop =
     context.placement === "sponsored"
-      ? `<div class="sponsored-banner">Sponsored placement | CPM ${formatCurrency(context.adCpmUsd || 0)}</div>`
+      ? `<div class="sponsored-banner">Sponsored | CPM ${formatCurrency(context.adCpmUsd || 0)}</div>`
       : "";
 
-  const promoteAction = canPromoteProduct(item)
-    ? `<button data-promote="${item.id}">Promote</button>`
-    : "";
+  const promoteAction = canPromoteProduct(item) ? `<button data-promote="${item.id}">Promote</button>` : "";
 
   card.innerHTML = `
     ${sponsoredTop}
@@ -120,30 +159,30 @@ function renderProduct(item, context = {}) {
     <div class="tags">${item.tags.map((t) => `<span>${t}</span>`).join("")}</div>
     <div class="meta">
       <span>${formatCurrency(item.priceUsd)}</span>
-      <span>Tier: ${item.score.qualityTier}</span>
-      <span>Speed: ${item.score.speedScore}</span>
-      <span>Stability: ${item.score.stabilityScore}</span>
+      <span>${item.score.qualityTier}</span>
+      <span>${item.likes} likes</span>
+    </div>
+    <div class="score-bars">
+      ${createScoreRow("Efficiency", item.score.efficiencyScore)}
+      ${createScoreRow("Speed", item.score.speedScore)}
+      ${createScoreRow("Stability", item.score.stabilityScore)}
     </div>
     <div class="card-actions">
-      <button class="like-btn" data-like="${item.id}">Like (${item.likes})</button>
+      <button class="like-btn" data-like="${item.id}">Like</button>
       <button data-buy="${item.id}">Buy</button>
-      <button data-message="${item.id}" data-seller="${item.sellerId}">Message Seller</button>
+      <button data-message="${item.id}" data-seller="${item.sellerId}">Message</button>
       <button data-policy="${item.id}">Policy</button>
       ${promoteAction}
     </div>
   `;
 
-  card.querySelector("[data-like]")?.addEventListener("click", async (event) => {
-    const btn = event.currentTarget;
-    btn.disabled = true;
+  card.querySelector("[data-like]")?.addEventListener("click", async () => {
     try {
-      const updated = await api(`/api/products/${item.id}/like`, { method: "POST" });
-      btn.textContent = `Like (${updated.likes})`;
-      await loadSellerBoard();
+      await api(`/api/products/${item.id}/like`, { method: "POST" });
+      await refreshAllData();
     } catch (error) {
       setAuthOutput(error.message);
     }
-    btn.disabled = false;
   });
 
   card.querySelector("[data-buy]")?.addEventListener("click", async () => {
@@ -186,8 +225,67 @@ function renderDiscoverySlot(row) {
   const wrap = document.createElement("section");
   wrap.className = "feed-slot";
   wrap.innerHTML = `<div class="slot-title">Slot ${row.slot} | ${row.placement === "sponsored" ? "Sponsored" : "Organic"}</div>`;
-  wrap.appendChild(renderProduct({ ...row.product, score: row.score }, row));
+  wrap.appendChild(renderProductCard({ ...row.product, score: row.score }, row));
   return wrap;
+}
+
+function renderCatalog(rows) {
+  productsNode.innerHTML = "";
+  rows.forEach((row) => productsNode.appendChild(renderProductCard(row)));
+}
+
+function renderDiscovery(rows) {
+  productsNode.innerHTML = "";
+  rows.forEach((row) => productsNode.appendChild(renderDiscoverySlot(row)));
+}
+
+function renderSellerBoard(rows) {
+  sellersNode.innerHTML = rows
+    .map(
+      (row) => `
+      <tr>
+        <td><span class="rank-pill">${row.rank}</span></td>
+        <td>${row.sellerName}${row.verified ? " ✓" : ""}</td>
+        <td>
+          <span class="health-wrap">
+            <span class="health-track"><span class="health-fill" style="width:${row.businessHealthScore}%"></span></span>
+            <strong>${Number(row.businessHealthScore).toFixed(0)}</strong>
+          </span>
+        </td>
+        <td>${Number(row.avgEfficiencyScore).toFixed(1)}</td>
+      </tr>
+    `,
+    )
+    .join("");
+}
+
+function updateKpis() {
+  const catalog = state.catalogRows;
+  const sellers = state.sellers;
+  const feed = state.discoveryRows;
+
+  const productCount = catalog.length;
+  const avgScore =
+    productCount > 0
+      ? catalog.reduce((sum, row) => sum + Number(row.score.efficiencyScore), 0) / productCount
+      : 0;
+  const sponsoredSlots = feed.filter((row) => row.placement === "sponsored").length;
+  const sponsoredShare = feed.length > 0 ? (sponsoredSlots / feed.length) * 100 : 0;
+  const topSeller = sellers[0];
+
+  metricProducts.textContent = String(productCount);
+  metricProductsMeta.textContent = `${formatCompact(catalog.reduce((sum, row) => sum + Number(row.likes || 0), 0))} total likes tracked`;
+
+  metricAvgScore.textContent = Number(avgScore).toFixed(1);
+  metricAvgScoreMeta.textContent = `${catalog.filter((row) => row.score.qualityTier === "Platinum").length} platinum assets`;
+
+  metricSponsoredShare.textContent = `${Number(sponsoredShare).toFixed(0)}%`;
+  metricSponsoredMeta.textContent = `${sponsoredSlots}/${feed.length || 0} slots are paid placements`;
+
+  metricTopSeller.textContent = topSeller ? topSeller.sellerName : "-";
+  metricTopSellerMeta.textContent = topSeller
+    ? `Health ${Number(topSeller.businessHealthScore).toFixed(1)} | ${topSeller.totalLikes} likes`
+    : "Waiting for seller data";
 }
 
 async function loadCatalog() {
@@ -197,8 +295,8 @@ async function loadCatalog() {
   if (sortFilter.value) params.set("sort", sortFilter.value);
 
   const rows = await api(`/api/products?${params.toString()}`);
-  productsNode.innerHTML = "";
-  rows.forEach((row) => productsNode.appendChild(renderProduct(row)));
+  state.catalogRows = rows;
+  return rows;
 }
 
 async function loadDiscoveryFeed() {
@@ -208,32 +306,44 @@ async function loadDiscoveryFeed() {
   params.set("slots", slotFilter.value || "12");
 
   const rows = await api(`/api/discovery/feed?${params.toString()}`);
-  productsNode.innerHTML = "";
-  rows.forEach((row) => productsNode.appendChild(renderDiscoverySlot(row)));
-}
-
-async function refreshMarketplace() {
-  sortFilter.disabled = viewMode.value === "discovery";
-  productsNode.innerHTML = '<p class="hint">Loading marketplace...</p>';
-  try {
-    if (viewMode.value === "discovery") {
-      await loadDiscoveryFeed();
-    } else {
-      await loadCatalog();
-    }
-  } catch (error) {
-    productsNode.innerHTML = `<p class="hint">${error.message}</p>`;
-  }
+  state.discoveryRows = rows;
+  return rows;
 }
 
 async function loadSellerBoard() {
   const rows = await api("/api/leaderboard/sellers");
-  sellersNode.innerHTML = rows
-    .map(
-      (row) =>
-        `<tr><td>${row.rank}</td><td>${row.sellerName}${row.verified ? " (verified)" : ""}</td><td>${row.businessHealthScore}</td><td>${row.avgEfficiencyScore}</td><td>${row.totalLikes}</td></tr>`,
-    )
-    .join("");
+  state.sellers = rows;
+  renderSellerBoard(rows);
+  return rows;
+}
+
+async function refreshMarketplace() {
+  sortFilter.disabled = viewMode.value === "discovery";
+  productsNode.innerHTML = '<p class="panel-head">Loading marketplace...</p>';
+
+  if (viewMode.value === "discovery") {
+    const rows = await loadDiscoveryFeed();
+    renderDiscovery(rows);
+  } else {
+    const rows = await loadCatalog();
+    renderCatalog(rows);
+  }
+}
+
+async function refreshAllData() {
+  try {
+    const [catalogRows, discoveryRows] = await Promise.all([loadCatalog(), loadDiscoveryFeed()]);
+    await loadSellerBoard();
+
+    if (viewMode.value === "discovery") {
+      renderDiscovery(discoveryRows);
+    } else {
+      renderCatalog(catalogRows);
+    }
+    updateKpis();
+  } catch (error) {
+    productsNode.innerHTML = `<p>${error.message}</p>`;
+  }
 }
 
 async function loadMe() {
@@ -326,6 +436,7 @@ promotionStatusBtn.addEventListener("click", async () => {
       body: JSON.stringify({ status: nextStatus }),
     });
     setAuthOutput(updated);
+    await refreshAllData();
   } catch (error) {
     setAuthOutput(error.message);
   }
@@ -349,9 +460,23 @@ adminPayoutsBtn.addEventListener("click", async () => {
   }
 });
 
+refreshBtn.addEventListener("click", refreshAllData);
+
+jumpDiscoveryBtn.addEventListener("click", async () => {
+  viewMode.value = "discovery";
+  await refreshMarketplace();
+  document.getElementById("marketplace")?.scrollIntoView({ behavior: "smooth", block: "start" });
+});
+
+jumpCatalogBtn.addEventListener("click", async () => {
+  viewMode.value = "catalog";
+  await refreshMarketplace();
+  document.getElementById("marketplace")?.scrollIntoView({ behavior: "smooth", block: "start" });
+});
+
 [searchInput, viewMode, typeFilter, sortFilter, slotFilter].forEach((el) => {
   el.addEventListener("input", refreshMarketplace);
   el.addEventListener("change", refreshMarketplace);
 });
 
-await Promise.all([refreshMarketplace(), loadSellerBoard(), loadMe()]);
+await Promise.all([loadMe(), refreshAllData()]);

@@ -7,22 +7,85 @@
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <header class="hero">
-      <p class="eyebrow">Ruleset AI Marketplace</p>
-      <h1>Sell and buy rules, skills, agents, and n8n workflows with measurable quality</h1>
-      <p class="subtitle">Includes auth, payouts, messaging, policy checks, and sponsored discovery campaigns with budget controls.</p>
+    <div class="backdrop" aria-hidden="true"></div>
+
+    <header class="site-header">
+      <div class="brand-mark">Ruleset AI</div>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="#workspace">Workspace</a>
+        <a href="#marketplace">Marketplace</a>
+        <a href="#insights">Insights</a>
+      </nav>
+      <button id="refreshBtn" type="button" class="ghost-btn">Refresh Data</button>
     </header>
 
-    <main class="layout">
-      <section class="panel auth-panel">
-        <h2>Account</h2>
-        <p class="hint">Demo password: <code>demo1234</code> (try <code>buyer@demo.local</code>)</p>
-        <form id="loginForm" class="inline-form">
-          <input id="emailInput" type="email" placeholder="email" required />
-          <input id="passwordInput" type="password" placeholder="password" required />
-          <button type="submit">Login</button>
+    <section class="hero" id="workspace">
+      <div class="hero-copy">
+        <p class="eyebrow">Marketplace Operating System</p>
+        <h1>Ship digital products with measurable quality, trusted rankings, and promotion economics.</h1>
+        <p class="subtitle">
+          This workspace combines buyer UX, seller finance, sponsored discovery, and governance rules in one fast,
+          accessible interface.
+        </p>
+        <div class="hero-actions">
+          <button id="jumpDiscoveryBtn" type="button" class="primary-btn">Open Discovery Feed</button>
+          <button id="jumpCatalogBtn" type="button" class="secondary-btn">Open Catalog</button>
+        </div>
+      </div>
+      <div class="hero-surface" aria-label="Platform capability overview">
+        <article>
+          <h3>Trust Layer</h3>
+          <p>Policy checks, seller health scoring, and SLA visibility for confident purchasing decisions.</p>
+        </article>
+        <article>
+          <h3>Growth Layer</h3>
+          <p>Sponsored placements with CPM bidding, budget controls, and transparent ad labeling.</p>
+        </article>
+        <article>
+          <h3>Ops Layer</h3>
+          <p>Orders, payouts, messaging, and role-specific controls for buyers, sellers, and admins.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="kpi-strip" aria-label="Marketplace key performance indicators">
+      <article class="kpi-card">
+        <p>Total Listings</p>
+        <h2 id="metricProducts">0</h2>
+        <span id="metricProductsMeta">Across all asset categories</span>
+      </article>
+      <article class="kpi-card">
+        <p>Average Efficiency</p>
+        <h2 id="metricAvgScore">0</h2>
+        <span id="metricAvgScoreMeta">Weighted by current catalog mix</span>
+      </article>
+      <article class="kpi-card">
+        <p>Sponsored Share</p>
+        <h2 id="metricSponsoredShare">0%</h2>
+        <span id="metricSponsoredMeta">Discovery feed monetization ratio</span>
+      </article>
+      <article class="kpi-card">
+        <p>Top Seller Health</p>
+        <h2 id="metricTopSeller">-</h2>
+        <span id="metricTopSellerMeta">Live leaderboard leader</span>
+      </article>
+    </section>
+
+    <main class="workspace-grid">
+      <section class="panel control-panel">
+        <div class="panel-head">
+          <h2>Control Center</h2>
+          <p>Demo password: <code>demo1234</code> (try <code>buyer@demo.local</code>)</p>
+        </div>
+
+        <form id="loginForm" class="inline-form" aria-label="Login form">
+          <input id="emailInput" type="email" placeholder="Email" required />
+          <input id="passwordInput" type="password" placeholder="Password" required />
+          <button type="submit" class="primary-btn">Sign In</button>
         </form>
+
         <div id="authState" class="auth-state">Not logged in</div>
+
         <div class="auth-actions">
           <button id="logoutBtn" type="button">Logout</button>
           <button id="myOrdersBtn" type="button">My Orders</button>
@@ -33,19 +96,24 @@
           <button id="slaBtn" type="button">Seller SLA</button>
           <button id="adminPayoutsBtn" type="button">Admin Payouts</button>
         </div>
-        <pre id="authOutput" class="output"></pre>
+
+        <pre id="authOutput" class="output" aria-live="polite"></pre>
       </section>
 
-      <section class="panel">
-        <h2>Marketplace</h2>
+      <section class="panel market-panel" id="marketplace">
+        <div class="panel-head">
+          <h2>Marketplace Canvas</h2>
+          <p>Switch between high-intent catalog browsing and ad-monetized discovery slots.</p>
+        </div>
+
         <div class="controls">
-          <input id="searchInput" placeholder="Search products" />
+          <input id="searchInput" placeholder="Search skills, agents, rules, workflows" />
           <select id="viewMode">
-            <option value="catalog">Catalog</option>
+            <option value="catalog">Catalog View</option>
             <option value="discovery">Discovery Feed</option>
           </select>
           <select id="typeFilter">
-            <option value="">All types</option>
+            <option value="">All asset types</option>
             <option value="rule">Rules</option>
             <option value="skill">Skills</option>
             <option value="agent">Agents</option>
@@ -62,24 +130,37 @@
             <option value="16">16 slots</option>
           </select>
         </div>
-        <div id="products" class="cards"></div>
+
+        <div id="products" class="cards" aria-live="polite"></div>
       </section>
 
-      <section class="panel">
-        <h2>Seller Leaderboard</h2>
+      <aside class="panel insights-panel" id="insights">
+        <div class="panel-head compact">
+          <h2>Seller Insights</h2>
+          <p>Business health ranking, engagement velocity, and quality confidence.</p>
+        </div>
+
         <table>
           <thead>
             <tr>
               <th>Rank</th>
               <th>Seller</th>
               <th>Health</th>
-              <th>Avg Efficiency</th>
-              <th>Likes</th>
+              <th>Efficiency</th>
             </tr>
           </thead>
           <tbody id="sellerLeaderboard"></tbody>
         </table>
-      </section>
+
+        <section class="mini-panel">
+          <h3>Product Experience Principles</h3>
+          <ul>
+            <li>Fast-first interactions with no scroll-jacking.</li>
+            <li>Progressive complexity: simple defaults, expert controls.</li>
+            <li>Clear economic signals: pricing, score, promotion, and policy.</li>
+          </ul>
+        </section>
+      </aside>
     </main>
 
     <script type="module" src="/app.js"></script>
