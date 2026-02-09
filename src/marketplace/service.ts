@@ -203,6 +203,18 @@ export class MarketplaceService {
     });
   }
 
+  listPendingPayouts() {
+    return this.repo.getPendingPayouts();
+  }
+
+  markPayoutPaid(payoutId: string) {
+    const updated = this.repo.markPayoutPaid(payoutId);
+    if (!updated) {
+      throw new Error("Payout not found");
+    }
+    return updated;
+  }
+
   sendMessage(input: { productId: string; fromUserId: string; toSellerId: string; body: string }) {
     const sellerUser = this.repo.getPrimarySellerUser(input.toSellerId);
     if (!sellerUser) {

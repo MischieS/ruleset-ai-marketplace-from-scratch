@@ -19,6 +19,12 @@ describe("phase flows", () => {
     const sellerToken = sellerLogin.body.token as string;
     const sellerUserId = sellerLogin.body.user.id as string;
 
+    const adminLogin = await request(app)
+      .post("/api/auth/login")
+      .send({ email: "admin@demo.local", password: "demo1234" })
+      .expect(200);
+    const adminToken = adminLogin.body.token as string;
+
     const products = await request(app).get("/api/products?sort=score").expect(200);
     const orbitProduct = products.body.find((p: any) => p.sellerId === "seller_orbit");
     const productId = orbitProduct.id as string;
@@ -42,6 +48,19 @@ describe("phase flows", () => {
       .set("Authorization", `Bearer ${sellerToken}`)
       .expect(201);
     expect(payout.body.amountUsd).toBeGreaterThan(0);
+
+    const pending = await request(app)
+      .get("/api/admin/payouts/pending")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .expect(200);
+    expect(pending.body.length).toBeGreaterThan(0);
+
+    const pay = await request(app)
+      .post(`/api/admin/payouts/${payout.body.id}`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ status: "paid" })
+      .expect(200);
+    expect(pay.body.status).toBe("paid");
 
     const buyerMessage = await request(app)
       .post("/api/messages")

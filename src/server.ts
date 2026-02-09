@@ -6,6 +6,7 @@ import { MarketplaceRepository } from "./marketplace/repository.js";
 import { MarketplaceService, summarizeProduct } from "./marketplace/service.js";
 import { PostgresEventSink } from "./infra/postgres.js";
 import { requireAuth, requireRole, signAuthToken } from "./infra/auth.js";
+import { createRateLimiter, hardenHttp } from "./infra/security.js";
 
 const registerSchema = z.object({
   email: z.string().email(),
@@ -34,6 +35,10 @@ const sendReplySchema = z.object({
   productId: z.string().min(2),
   toUserId: z.string().min(2),
   body: z.string().min(3).max(1000),
+});
+
+const payoutStatusSchema = z.object({
+  status: z.enum(["paid"]),
 });
 
 export async function createApp(seedPath = "data/marketplace.seed.json") {
@@ -65,10 +70,18 @@ export async function createApp(seedPath = "data/marketplace.seed.json") {
   };
 
   const app = express();
+  const authLimiter = createRateLimiter(30);
+
+  app.use(hardenHttp());
   app.use(express.json());
 
   app.get("/api/health", (_req, res) => {
-    res.json({ status: "ok", postgresEventSink: eventSink.enabled });
+    res.json({
+      status: "ok",
+      postgresEventSink: eventSink.enabled,
+      version: "0.3.0",
+      now: new Date().toISOString(),
+    });
   });
 
   app.get("/api/demo/accounts", (_req, res) => {
@@ -85,7 +98,7 @@ export async function createApp(seedPath = "data/marketplace.seed.json") {
     });
   });
 
-  app.post("/api/auth/register", async (req, res) => {
+  app.post("/api/auth/register", authLimiter, async (req, res) => {
     try {
       const input = registerSchema.parse(req.body);
       const user = await service.registerUser(input);
@@ -97,7 +110,7 @@ export async function createApp(seedPath = "data/marketplace.seed.json") {
     }
   });
 
-  app.post("/api/auth/login", async (req, res) => {
+  app.post("/api/auth/login", authLimiter, async (req, res) => {
     try {
       const input = loginSchema.parse(req.body);
       const user = await service.authenticate(input.email, input.password);
@@ -203,6 +216,22 @@ export async function createApp(seedPath = "data/marketplace.seed.json") {
       const payout = service.requestPayout(req.auth!.sellerId, req.auth!.sub);
       await logEvent("payout.requested", payout);
       res.status(201).json(payout);
+    } catch (error) {
+      res.status(400).json({ error: (error as Error).message });
+    }
+  });
+
+  app.get("/api/admin/payouts/pending", requireAuth, requireRole("admin"), (req, res) => {
+    res.json(service.listPendingPayouts());
+  });
+
+  app.post("/api/admin/payouts/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      payoutStatusSchema.parse(req.body);
+      const payoutId = String(req.params.id);
+      const updated = service.markPayoutPaid(payoutId);
+      await logEvent("payout.paid", updated);
+      res.json(updated);
     } catch (error) {
       res.status(400).json({ error: (error as Error).message });
     }

@@ -12,6 +12,7 @@ const logoutBtn = document.getElementById("logoutBtn");
 const myOrdersBtn = document.getElementById("myOrdersBtn");
 const financeBtn = document.getElementById("financeBtn");
 const slaBtn = document.getElementById("slaBtn");
+const adminPayoutsBtn = document.getElementById("adminPayoutsBtn");
 
 let token = localStorage.getItem("ruleset_token") ?? "";
 let me = null;
@@ -207,6 +208,15 @@ slaBtn.addEventListener("click", async () => {
   try {
     const sla = await api("/api/sla/seller");
     setAuthOutput(sla);
+  } catch (error) {
+    setAuthOutput(error.message);
+  }
+});
+
+adminPayoutsBtn.addEventListener("click", async () => {
+  try {
+    const pending = await api("/api/admin/payouts/pending");
+    setAuthOutput(pending);
   } catch (error) {
     setAuthOutput(error.message);
   }

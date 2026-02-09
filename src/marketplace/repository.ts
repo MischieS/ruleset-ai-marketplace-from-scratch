@@ -138,4 +138,19 @@ export class MarketplaceRepository {
   getPayoutsBySeller(sellerId: string): Payout[] {
     return this.payouts.filter((p) => p.sellerId === sellerId);
   }
+
+  getPendingPayouts(): Payout[] {
+    return this.payouts.filter((p) => p.status === "pending");
+  }
+
+  getPayoutById(payoutId: string): Payout | undefined {
+    return this.payouts.find((p) => p.id === payoutId);
+  }
+
+  markPayoutPaid(payoutId: string): Payout | undefined {
+    const found = this.payouts.find((p) => p.id === payoutId);
+    if (!found) return undefined;
+    found.status = "paid";
+    return found;
+  }
 }

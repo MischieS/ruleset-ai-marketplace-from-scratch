@@ -13,9 +13,12 @@ Marketplace for selling and buying digital assets:
 - Product discovery, likes, scoring board, seller leaderboard
 - Commerce flow (orders with platform fee and payout split)
 - Seller finance and payout request flow
+- Admin payout review and payment endpoint
 - Buyer/seller messaging and seller SLA endpoint
 - Listing policy engine for promotion eligibility
 - Optional Postgres event and score persistence
+- Security hardening (headers + auth rate limiting)
+- CI workflow for build/test gates
 - Vercel deployment config and API entrypoint
 
 ## Demo accounts
@@ -59,6 +62,8 @@ npm run check
 - `GET /api/orders/me`
 - `GET /api/seller/finance`
 - `POST /api/seller/payouts/request`
+- `GET /api/admin/payouts/pending`
+- `POST /api/admin/payouts/:id`
 - `POST /api/messages`
 - `POST /api/messages/reply`
 - `GET /api/messages/thread`
@@ -70,3 +75,10 @@ npm run check
 - `vercel.json` included
 - API handler at `api/index.ts`
 - static web app served from `web/`
+
+## Ops files
+
+- `.env.example`
+- `.github/workflows/ci.yml`
+- `db/migrations/001_market_observability.sql`
+- `docs/DEPLOYMENT.md`

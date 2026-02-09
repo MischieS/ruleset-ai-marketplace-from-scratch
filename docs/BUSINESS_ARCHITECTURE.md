@@ -28,6 +28,13 @@ Build a trusted marketplace where teams buy and sell reusable digital assets (`r
 - Order pipeline with platform fee split.
 - Seller finance summaries.
 - Payout request flow.
+6. Admin operations: done
+- Pending payout queue endpoint for admins.
+- Payout settlement endpoint for admin approval flow.
+7. Platform security and reliability: done
+- Authentication rate limiting for abuse control.
+- Security headers for baseline hardening.
+- CI pipeline for merge-time quality gates.
 
 ## Operational strategy
 
