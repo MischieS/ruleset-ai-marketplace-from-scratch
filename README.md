@@ -42,6 +42,27 @@ npm run dev:server
 
 Open: `http://localhost:4173`
 
+## Next.js UI Studio (Frontend-First)
+
+A modern mock-data UI/UX workspace is available in `product-ui/` with dedicated pages:
+
+- `/` Home
+- `/marketplace`
+- `/user`
+- `/seller`
+- `/admin`
+- `/business`
+
+Run it locally:
+
+```bash
+cd product-ui
+npm install
+npm run dev
+```
+
+Open: `http://localhost:3000`
+
 ## Validate
 
 ```bash
@@ -90,3 +111,4 @@ npm run check
 - `db/migrations/001_market_observability.sql`
 - `docs/DEPLOYMENT.md`
 - `docs/PRODUCTION_EXECUTION_BLUEPRINT.md`
+- `docs/UI_UX_BUSINESS_STRATEGY.md`
