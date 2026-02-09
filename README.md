@@ -21,6 +21,7 @@ Marketplace for selling and buying digital assets:
 - Security hardening (headers + auth rate limiting)
 - CI workflow for build/test gates
 - Vercel deployment config and API entrypoint
+- Product surface UI with five core pages: home, marketplace, user, seller, admin
 
 ## Demo accounts
 
@@ -88,3 +89,4 @@ npm run check
 - `.github/workflows/ci.yml`
 - `db/migrations/001_market_observability.sql`
 - `docs/DEPLOYMENT.md`
+- `docs/PRODUCTION_EXECUTION_BLUEPRINT.md`
