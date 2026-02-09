@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import request from "supertest";
-import { createApp } from "../src/server.js";
+import { createApp } from "../src/app.js";
 
 describe("phase flows", () => {
   it("supports auth, order creation, seller finance, payout, messaging and policy", async () => {
@@ -90,3 +90,4 @@ describe("phase flows", () => {
     expect(policy.body).toHaveProperty("promotedEligible");
   });
 });
+

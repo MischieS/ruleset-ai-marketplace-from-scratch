@@ -1,5 +1,5 @@
 import serverless from "serverless-http";
-import { createApp } from "../src/server.js";
+import { createApp } from "../src/app.js";
 
 let cachedHandler: ((req: any, res: any) => Promise<unknown>) | null = null;
 
@@ -16,3 +16,4 @@ export default async function handler(req: any, res: any) {
   const h = await getHandler();
   return h(req, res);
 }
+

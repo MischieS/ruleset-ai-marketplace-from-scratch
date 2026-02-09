@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import request from "supertest";
-import { createApp } from "../src/server.js";
+import { createApp } from "../src/app.js";
 
 describe("marketplace API", () => {
   it("lists products and increments likes", async () => {
@@ -26,3 +26,4 @@ describe("marketplace API", () => {
     await request(app).post("/api/products/missing/like").expect(404);
   });
 });
+

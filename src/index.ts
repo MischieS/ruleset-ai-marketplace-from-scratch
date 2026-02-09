@@ -18,4 +18,5 @@ export { calculateProductScore, calculateSellerScore } from "./marketplace/scori
 export { evaluateListingPolicy } from "./marketplace/policy.js";
 export { MarketplaceRepository } from "./marketplace/repository.js";
 export { MarketplaceService } from "./marketplace/service.js";
-export { createApp } from "./server.js";
+export { createApp } from "./app.js";
+
