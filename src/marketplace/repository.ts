@@ -3,6 +3,8 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import {
   seedSchema,
+  type PromotionCampaign,
+  type PromotionCampaignStatus,
   type MarketplaceSeed,
   type Message,
   type Order,
@@ -19,6 +21,7 @@ export class MarketplaceRepository {
   private messages: Message[] = [];
   private orders: Order[] = [];
   private payouts: Payout[] = [];
+  private promotions: PromotionCampaign[] = [];
 
   constructor(seed: MarketplaceSeed) {
     this.products = seed.products;
@@ -152,5 +155,66 @@ export class MarketplaceRepository {
     if (!found) return undefined;
     found.status = "paid";
     return found;
+  }
+
+  addPromotionCampaign(
+    campaign: Omit<
+      PromotionCampaign,
+      "id" | "status" | "spentUsd" | "impressions" | "clicks" | "createdAt" | "updatedAt"
+    >,
+  ): PromotionCampaign {
+    const now = new Date().toISOString();
+    const created: PromotionCampaign = {
+      ...campaign,
+      id: randomUUID(),
+      status: "active",
+      spentUsd: 0,
+      impressions: 0,
+      clicks: 0,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.promotions.push(created);
+    return created;
+  }
+
+  getPromotionsBySeller(sellerId: string): PromotionCampaign[] {
+    return this.promotions.filter((campaign) => campaign.sellerId === sellerId);
+  }
+
+  getPromotionById(campaignId: string): PromotionCampaign | undefined {
+    return this.promotions.find((campaign) => campaign.id === campaignId);
+  }
+
+  getActivePromotions(): PromotionCampaign[] {
+    return this.promotions.filter((campaign) => campaign.status === "active");
+  }
+
+  setPromotionStatus(campaignId: string, status: PromotionCampaignStatus): PromotionCampaign | undefined {
+    const campaign = this.promotions.find((item) => item.id === campaignId);
+    if (!campaign) return undefined;
+    campaign.status = status;
+    campaign.updatedAt = new Date().toISOString();
+    return campaign;
+  }
+
+  recordPromotionImpression(campaignId: string, costUsd: number): PromotionCampaign | undefined {
+    const campaign = this.promotions.find((item) => item.id === campaignId);
+    if (!campaign) return undefined;
+    campaign.impressions += 1;
+    campaign.spentUsd = Number((campaign.spentUsd + costUsd).toFixed(4));
+    campaign.updatedAt = new Date().toISOString();
+    if (campaign.spentUsd >= campaign.dailyBudgetUsd) {
+      campaign.status = "exhausted";
+    }
+    return campaign;
+  }
+
+  recordPromotionClick(campaignId: string): PromotionCampaign | undefined {
+    const campaign = this.promotions.find((item) => item.id === campaignId);
+    if (!campaign) return undefined;
+    campaign.clicks += 1;
+    campaign.updatedAt = new Date().toISOString();
+    return campaign;
   }
 }

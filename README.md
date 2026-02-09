@@ -16,6 +16,7 @@ Marketplace for selling and buying digital assets:
 - Admin payout review and payment endpoint
 - Buyer/seller messaging and seller SLA endpoint
 - Listing policy engine for promotion eligibility
+- Sponsored discovery feed with seller CPM campaigns and budget controls
 - Optional Postgres event and score persistence
 - Security hardening (headers + auth rate limiting)
 - CI workflow for build/test gates
@@ -57,10 +58,15 @@ npm run check
 - `POST /api/auth/login`
 - `GET /api/auth/me`
 - `GET /api/products`
+- `GET /api/discovery/feed`
 - `POST /api/products/:id/like`
+- `POST /api/promotions/:id/click`
 - `POST /api/orders`
 - `GET /api/orders/me`
 - `GET /api/seller/finance`
+- `GET /api/seller/promotions`
+- `POST /api/seller/promotions`
+- `POST /api/seller/promotions/:id/status`
 - `POST /api/seller/payouts/request`
 - `GET /api/admin/payouts/pending`
 - `POST /api/admin/payouts/:id`

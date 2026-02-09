@@ -3,7 +3,7 @@ import request from "supertest";
 import { createApp } from "../src/app.js";
 
 describe("phase flows", () => {
-  it("supports auth, order creation, seller finance, payout, messaging and policy", async () => {
+  it("supports auth, order creation, payouts, messaging, policy and sponsored discovery", async () => {
     const app = await createApp("data/marketplace.seed.json");
 
     const buyerLogin = await request(app)
@@ -88,6 +88,39 @@ describe("phase flows", () => {
 
     const policy = await request(app).get(`/api/policy/products/${productId}`).expect(200);
     expect(policy.body).toHaveProperty("promotedEligible");
+
+    const campaign = await request(app)
+      .post("/api/seller/promotions")
+      .set("Authorization", `Bearer ${sellerToken}`)
+      .send({
+        productId,
+        bidCpmUsd: 6,
+        dailyBudgetUsd: 30,
+      })
+      .expect(201);
+    expect(campaign.body.status).toBe("active");
+
+    const discovery = await request(app).get("/api/discovery/feed?slots=8").expect(200);
+    expect(Array.isArray(discovery.body)).toBe(true);
+    const sponsored = discovery.body.find((row: any) => row.placement === "sponsored");
+    expect(sponsored).toBeDefined();
+    expect(sponsored.campaignId).toBe(campaign.body.id);
+
+    await request(app).post(`/api/promotions/${campaign.body.id}/click`).expect(200);
+
+    const promotions = await request(app)
+      .get("/api/seller/promotions")
+      .set("Authorization", `Bearer ${sellerToken}`)
+      .expect(200);
+    const listed = promotions.body.find((row: any) => row.id === campaign.body.id);
+    expect(listed.impressions).toBeGreaterThan(0);
+    expect(listed.clicks).toBeGreaterThan(0);
+
+    await request(app)
+      .post(`/api/seller/promotions/${campaign.body.id}/status`)
+      .set("Authorization", `Bearer ${sellerToken}`)
+      .send({ status: "paused" })
+      .expect(200);
   });
 });
 

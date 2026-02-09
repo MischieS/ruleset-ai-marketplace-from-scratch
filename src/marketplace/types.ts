@@ -85,6 +85,22 @@ export type Payout = {
   createdAt: string;
 };
 
+export type PromotionCampaignStatus = "active" | "paused" | "exhausted";
+
+export type PromotionCampaign = {
+  id: string;
+  sellerId: string;
+  productId: string;
+  bidCpmUsd: number;
+  dailyBudgetUsd: number;
+  spentUsd: number;
+  impressions: number;
+  clicks: number;
+  status: PromotionCampaignStatus;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type ProductScore = {
   productId: string;
   efficiencyScore: number;
@@ -120,4 +136,13 @@ export type SellerSlaStat = {
   conversations: number;
   avgFirstResponseHours: number;
   onTimeRate: number;
+};
+
+export type DiscoveryFeedRow = {
+  slot: number;
+  placement: "sponsored" | "organic";
+  campaignId?: string;
+  adCpmUsd?: number;
+  product: Product;
+  score: ProductScore;
 };

@@ -31,7 +31,11 @@ Build a trusted marketplace where teams buy and sell reusable digital assets (`r
 6. Admin operations: done
 - Pending payout queue endpoint for admins.
 - Payout settlement endpoint for admin approval flow.
-7. Platform security and reliability: done
+7. Promotion marketplace economics: done
+- Seller-funded CPM campaigns with budget caps.
+- Sponsored discovery feed with transparent ad labeling.
+- Campaign pause controls and click/impression tracking.
+8. Platform security and reliability: done
 - Authentication rate limiting for abuse control.
 - Security headers for baseline hardening.
 - CI pipeline for merge-time quality gates.
@@ -41,11 +45,12 @@ Build a trusted marketplace where teams buy and sell reusable digital assets (`r
 - Use policy and score signals for ranking and promotion eligibility.
 - Keep likes as soft social signal with capped influence.
 - Use SLA and refund performance for trust gating.
+- Blend paid placements into discovery with fixed slot cadence and explicit sponsored labels.
 - Use Postgres event data for dashboards and abuse detection.
 
 ## Next business enhancement options
 
 1. Add fraud/risk models for account, payment, and content abuse.
-2. Add subscription tiers and promoted inventory bidding.
+2. Add subscription tiers with campaign credits and bulk ad-buy incentives.
 3. Add dispute management with evidence timeline and arbitration rules.
 4. Add multi-currency and tax/VAT handling.

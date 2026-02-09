@@ -41,6 +41,16 @@ const payoutStatusSchema = z.object({
   status: z.enum(["paid"]),
 });
 
+const createPromotionSchema = z.object({
+  productId: z.string().min(2),
+  bidCpmUsd: z.number().min(1),
+  dailyBudgetUsd: z.number().min(10),
+});
+
+const promotionStatusSchema = z.object({
+  status: z.enum(["active", "paused"]),
+});
+
 export async function createApp(seedPath = "data/marketplace.seed.json") {
   const repo = await MarketplaceRepository.fromFile(seedPath);
   const service = new MarketplaceService(repo);
@@ -145,6 +155,30 @@ export async function createApp(seedPath = "data/marketplace.seed.json") {
     res.json(rows.map(({ product, score }) => ({ ...summarizeProduct(product), score })));
   });
 
+  app.get("/api/discovery/feed", async (req, res) => {
+    const q = typeof req.query.q === "string" ? req.query.q : undefined;
+    const type = typeof req.query.type === "string" ? req.query.type : undefined;
+    const slotsRaw = Number(req.query.slots ?? 12);
+    const slots = Number.isFinite(slotsRaw) ? slotsRaw : 12;
+
+    const feed = service.discoveryFeed({ q, type, slots });
+    await logEvent("discovery.feed_served", {
+      slotsRequested: slots,
+      slotsServed: feed.length,
+      sponsoredSlots: feed.filter((row) => row.placement === "sponsored").length,
+    });
+    res.json(
+      feed.map((row) => ({
+        slot: row.slot,
+        placement: row.placement,
+        campaignId: row.campaignId,
+        adCpmUsd: row.adCpmUsd,
+        product: summarizeProduct(row.product),
+        score: row.score,
+      })),
+    );
+  });
+
   app.get("/api/products/:id", (req, res) => {
     const found = service.getProduct(req.params.id);
     if (!found) {
@@ -164,6 +198,17 @@ export async function createApp(seedPath = "data/marketplace.seed.json") {
     await logEvent("product.like", { productId: liked.product.id });
     await logScore("product_efficiency", liked.product.id, liked.score.efficiencyScore, liked.score);
     res.json({ ...summarizeProduct(liked.product), score: liked.score });
+  });
+
+  app.post("/api/promotions/:id/click", async (req, res) => {
+    try {
+      const campaignId = String(req.params.id);
+      const campaign = service.registerPromotionClick(campaignId);
+      await logEvent("promotion.click", { campaignId: campaign.id, productId: campaign.productId });
+      res.json(campaign);
+    } catch (error) {
+      res.status(404).json({ error: (error as Error).message });
+    }
   });
 
   app.get("/api/leaderboard/products", (req, res) => {
@@ -204,6 +249,50 @@ export async function createApp(seedPath = "data/marketplace.seed.json") {
       return;
     }
     res.json(service.getSellerFinance(req.auth!.sellerId));
+  });
+
+  app.get("/api/seller/promotions", requireAuth, requireRole("seller"), (req, res) => {
+    if (!req.auth!.sellerId) {
+      res.status(400).json({ error: "Seller account is missing sellerId" });
+      return;
+    }
+    res.json(service.listSellerPromotions(req.auth!.sellerId));
+  });
+
+  app.post("/api/seller/promotions", requireAuth, requireRole("seller"), async (req, res) => {
+    try {
+      if (!req.auth!.sellerId) {
+        res.status(400).json({ error: "Seller account is missing sellerId" });
+        return;
+      }
+
+      const input = createPromotionSchema.parse(req.body);
+      const campaign = service.createPromotionCampaign(req.auth!.sellerId, input);
+      await logEvent("promotion.created", campaign);
+      res.status(201).json(campaign);
+    } catch (error) {
+      res.status(400).json({ error: (error as Error).message });
+    }
+  });
+
+  app.post("/api/seller/promotions/:id/status", requireAuth, requireRole("seller"), async (req, res) => {
+    try {
+      if (!req.auth!.sellerId) {
+        res.status(400).json({ error: "Seller account is missing sellerId" });
+        return;
+      }
+
+      const input = promotionStatusSchema.parse(req.body);
+      const updated = service.updatePromotionStatus(req.auth!.sellerId, String(req.params.id), input.status);
+      await logEvent("promotion.status_updated", {
+        campaignId: updated.id,
+        sellerId: updated.sellerId,
+        status: updated.status,
+      });
+      res.json(updated);
+    } catch (error) {
+      res.status(400).json({ error: (error as Error).message });
+    }
   });
 
   app.post("/api/seller/payouts/request", requireAuth, requireRole("seller"), async (req, res) => {

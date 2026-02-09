@@ -2,7 +2,14 @@ import bcrypt from "bcryptjs";
 import { calculateProductScore, calculateSellerScore } from "./scoring.js";
 import { MarketplaceRepository } from "./repository.js";
 import { evaluateListingPolicy } from "./policy.js";
-import type { Product, Role, SellerSlaStat, User } from "./types.js";
+import type {
+  DiscoveryFeedRow,
+  Product,
+  PromotionCampaignStatus,
+  Role,
+  SellerSlaStat,
+  User,
+} from "./types.js";
 
 type SortMode = "score" | "likes" | "new";
 
@@ -170,6 +177,7 @@ export class MarketplaceService {
   getSellerFinance(sellerId: string) {
     const orders = this.repo.getOrdersBySeller(sellerId);
     const payouts = this.repo.getPayoutsBySeller(sellerId);
+    const promotions = this.repo.getPromotionsBySeller(sellerId);
 
     const grossRevenue = Number(orders.reduce((sum, o) => sum + o.amountUsd, 0).toFixed(2));
     const platformFees = Number(orders.reduce((sum, o) => sum + o.platformFeeUsd, 0).toFixed(2));
@@ -178,6 +186,8 @@ export class MarketplaceService {
       payouts.filter((p) => p.status === "pending" || p.status === "paid").reduce((sum, p) => sum + p.amountUsd, 0).toFixed(2),
     );
     const availablePayout = Number((earnedPayout - requestedPayout).toFixed(2));
+    const adSpendUsd = Number(promotions.reduce((sum, campaign) => sum + campaign.spentUsd, 0).toFixed(2));
+    const netEarningsAfterAdsUsd = Number((earnedPayout - adSpendUsd).toFixed(2));
 
     return {
       grossRevenue,
@@ -185,8 +195,11 @@ export class MarketplaceService {
       earnedPayout,
       requestedPayout,
       availablePayout,
+      adSpendUsd,
+      netEarningsAfterAdsUsd,
       orderCount: orders.length,
       pendingPayoutCount: payouts.filter((p) => p.status === "pending").length,
+      activePromotionCount: promotions.filter((campaign) => campaign.status === "active").length,
     };
   }
 
@@ -273,6 +286,157 @@ export class MarketplaceService {
       avgFirstResponseHours: replied > 0 ? Number((totalHours / replied).toFixed(2)) : 0,
       onTimeRate: replied > 0 ? Number(((within24h / replied) * 100).toFixed(2)) : 0,
     };
+  }
+
+  createPromotionCampaign(sellerId: string, input: { productId: string; bidCpmUsd: number; dailyBudgetUsd: number }) {
+    if (input.bidCpmUsd < 1) {
+      throw new Error("bidCpmUsd must be at least 1");
+    }
+    if (input.dailyBudgetUsd < 10) {
+      throw new Error("dailyBudgetUsd must be at least 10");
+    }
+
+    const product = this.repo.getProductById(input.productId);
+    if (!product) {
+      throw new Error("Product not found");
+    }
+    if (product.sellerId !== sellerId) {
+      throw new Error("Promotion can only be created for your own listing");
+    }
+
+    const policy = this.evaluatePolicy(input.productId);
+    if (!policy.promotedEligible) {
+      throw new Error(`Product is not promotion eligible: ${policy.reasons.join(" ") || "policy check failed"}`);
+    }
+
+    return this.repo.addPromotionCampaign({
+      sellerId,
+      productId: input.productId,
+      bidCpmUsd: Number(input.bidCpmUsd.toFixed(2)),
+      dailyBudgetUsd: Number(input.dailyBudgetUsd.toFixed(2)),
+    });
+  }
+
+  listSellerPromotions(sellerId: string) {
+    return this.repo
+      .getPromotionsBySeller(sellerId)
+      .map((campaign) => {
+        const product = this.repo.getProductById(campaign.productId);
+        const ctr = campaign.impressions > 0 ? (campaign.clicks / campaign.impressions) * 100 : 0;
+        const remainingBudgetUsd = Number(Math.max(0, campaign.dailyBudgetUsd - campaign.spentUsd).toFixed(2));
+        return {
+          ...campaign,
+          productTitle: product?.title ?? "Unknown product",
+          remainingBudgetUsd,
+          ctrPercent: Number(ctr.toFixed(2)),
+        };
+      })
+      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+  }
+
+  updatePromotionStatus(sellerId: string, campaignId: string, status: PromotionCampaignStatus) {
+    const campaign = this.repo.getPromotionById(campaignId);
+    if (!campaign || campaign.sellerId !== sellerId) {
+      throw new Error("Promotion campaign not found");
+    }
+    if (campaign.status === "exhausted" && status === "active") {
+      throw new Error("Exhausted campaigns cannot be reactivated");
+    }
+
+    const updated = this.repo.setPromotionStatus(campaignId, status);
+    if (!updated) {
+      throw new Error("Promotion campaign not found");
+    }
+    return updated;
+  }
+
+  registerPromotionClick(campaignId: string) {
+    const campaign = this.repo.recordPromotionClick(campaignId);
+    if (!campaign) {
+      throw new Error("Promotion campaign not found");
+    }
+    return campaign;
+  }
+
+  discoveryFeed(filters: { q?: string; type?: string; slots?: number } = {}): DiscoveryFeedRow[] {
+    const desiredSlots = Number.isFinite(filters.slots) ? Number(filters.slots) : 12;
+    const slotLimit = Math.max(4, Math.min(30, desiredSlots));
+    const q = (filters.q ?? "").trim().toLowerCase();
+    const type = filters.type;
+
+    const organicRows = this.listProducts({ q, type, sort: "score" });
+    const sponsoredRows = this.repo
+      .getActivePromotions()
+      .map((campaign) => {
+        const product = this.repo.getProductById(campaign.productId);
+        if (!product) return undefined;
+        if (!this.matchesProductFilters(product, q, type)) return undefined;
+
+        const score = calculateProductScore(product);
+        const budgetRatio = campaign.dailyBudgetUsd > 0 ? campaign.spentUsd / campaign.dailyBudgetUsd : 1;
+        const deliveryBoost = Math.max(0.15, 1 - budgetRatio);
+        const rankScore = campaign.bidCpmUsd * 0.75 + score.efficiencyScore * 0.25 + deliveryBoost * 6;
+        return { campaign, product, score, rankScore };
+      })
+      .filter((row): row is NonNullable<typeof row> => Boolean(row))
+      .sort((a, b) => b.rankScore - a.rankScore);
+
+    const feed: DiscoveryFeedRow[] = [];
+    const usedProductIds = new Set<string>();
+    let organicIndex = 0;
+    let sponsoredIndex = 0;
+
+    const takeOrganic = (slot: number): DiscoveryFeedRow | undefined => {
+      while (organicIndex < organicRows.length) {
+        const row = organicRows[organicIndex++];
+        if (usedProductIds.has(row.product.id)) continue;
+        usedProductIds.add(row.product.id);
+        return {
+          slot,
+          placement: "organic",
+          product: row.product,
+          score: row.score,
+        };
+      }
+      return undefined;
+    };
+
+    const takeSponsored = (slot: number): DiscoveryFeedRow | undefined => {
+      while (sponsoredIndex < sponsoredRows.length) {
+        const row = sponsoredRows[sponsoredIndex++];
+        if (usedProductIds.has(row.product.id)) continue;
+        const cpmImpressionCost = Number((row.campaign.bidCpmUsd / 1000).toFixed(4));
+        const updatedCampaign = this.repo.recordPromotionImpression(row.campaign.id, cpmImpressionCost);
+        if (!updatedCampaign) continue;
+
+        usedProductIds.add(row.product.id);
+        return {
+          slot,
+          placement: "sponsored",
+          campaignId: updatedCampaign.id,
+          adCpmUsd: updatedCampaign.bidCpmUsd,
+          product: row.product,
+          score: row.score,
+        };
+      }
+      return undefined;
+    };
+
+    for (let slot = 1; slot <= slotLimit; slot += 1) {
+      const sponsoredSlot = slot % 4 === 1;
+      const row = sponsoredSlot ? takeSponsored(slot) ?? takeOrganic(slot) : takeOrganic(slot) ?? takeSponsored(slot);
+      if (!row) break;
+      feed.push(row);
+    }
+
+    return feed;
+  }
+
+  private matchesProductFilters(product: Product, q: string, type?: string) {
+    const typeOk = type ? product.type === type : true;
+    const haystack = [product.title, product.description, product.tags.join(" ")].join(" ").toLowerCase();
+    const queryOk = q.length > 0 ? haystack.includes(q) : true;
+    return typeOk && queryOk;
   }
 
   evaluatePolicy(productId: string) {
